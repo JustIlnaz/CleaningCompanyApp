@@ -37,8 +37,7 @@ namespace CleaningFrontend.ApiRequests.Services
             _httpClient.DefaultRequestHeaders.Clear();
             _httpClient.DefaultRequestHeaders.Add("Authorization", token);
             var response = await _httpClient.PostAsJsonAsync("api/order/createorder", order);
-            var result = await response.Content.ReadFromJsonAsync<ActionResult>();
-            return result?.status ?? false;
+            return await ReadStatus(response);
         }
 
         public async Task<bool> UpdateOrder(OrderModel order, string token)
@@ -46,8 +45,7 @@ namespace CleaningFrontend.ApiRequests.Services
             _httpClient.DefaultRequestHeaders.Clear();
             _httpClient.DefaultRequestHeaders.Add("Authorization", token);
             var response = await _httpClient.PutAsJsonAsync("api/order/updateorder", order);
-            var result = await response.Content.ReadFromJsonAsync<ActionResult>();
-            return result?.status ?? false;
+            return await ReadStatus(response);
         }
 
         public async Task<bool> DeleteOrder(int id, string token)
@@ -55,8 +53,21 @@ namespace CleaningFrontend.ApiRequests.Services
             _httpClient.DefaultRequestHeaders.Clear();
             _httpClient.DefaultRequestHeaders.Add("Authorization", token);
             var response = await _httpClient.DeleteAsync($"api/order/deleteorder?id={id}");
-            var result = await response.Content.ReadFromJsonAsync<ActionResult>();
-            return result?.status ?? false;
+            return await ReadStatus(response);
+        }
+
+        private static async Task<bool> ReadStatus(HttpResponseMessage response)
+        {
+            if (!response.IsSuccessStatusCode) return false;
+            try
+            {
+                var result = await response.Content.ReadFromJsonAsync<ActionResult>();
+                return result?.status ?? false;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         public async Task<List<OrderModel>> GetMyOrders(string token)
