@@ -12,5 +12,6 @@ namespace CleaningApi.Interfaces
         Task<IActionResult> UpdateMaterial(UpdateMaterial material);
         Task<IActionResult> DeleteMaterial(int id);
         Task<IActionResult> GetMaterialsByBrigade(int brigadeId);
+        Task<IActionResult> RequestMaterial(RequestMaterial request, string token);
     }
 }

@@ -72,7 +72,7 @@
             <EditForm Model="@orderModel" OnValidSubmit="@SaveOrder">
                 <div class="form-group">
                     <label>Дата выполнения</label>
-                    <InputDate @bind-value="orderModel.ScheduledDate" class="form-control" />
+                    <InputDate TValue="DateTime" @bind-Value="orderModel.ScheduledDate" class="form-control" />
                 </div>
                 <div class="form-group">
                     <label>Тип уборки</label>
@@ -85,7 +85,7 @@
                 </div>
                 <div class="form-group">
                     <label>Цена</label>
-                    <InputNumber @bind-value="orderModel.Price" class="form-control" />
+                    <InputNumber TValue="double" @bind-Value="orderModel.Price" class="form-control" />
                 </div>
                 <div class="form-group">
                     <label>Статус</label>

@@ -1,9 +1,11 @@
 using System.Linq;
 using System.Threading.Tasks;
 using CleaningApi.DatabaseContext;
+using CleaningApi.Hubs;
 using CleaningApi.Interfaces;
 using CleaningApi.Requests;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 
 namespace CleaningApi.Services
@@ -11,10 +13,12 @@ namespace CleaningApi.Services
     public class MaterialServices : IMaterialServices
     {
         private readonly ContextDb _contextDb;
+        private readonly IHubContext<NotificationHub> _notificationHub;
 
-        public MaterialServices(ContextDb contextDb)
+        public MaterialServices(ContextDb contextDb, IHubContext<NotificationHub> notificationHub)
         {
             _contextDb = contextDb;
+            _notificationHub = notificationHub;
         }
 
         public async Task<IActionResult> GetAllMaterials()
@@ -100,6 +104,34 @@ namespace CleaningApi.Services
                 .ToListAsync();
 
             return new OkObjectResult(new { status = true, materials });
+        }
+
+        public async Task<IActionResult> RequestMaterial(RequestMaterial request, string token)
+        {
+            var session = await _contextDb.Sessions.Include(x => x.User).FirstOrDefaultAsync(x => x.Token == token);
+            if (session == null)
+            {
+                return new UnauthorizedObjectResult(new { status = false, error = "Сессия не найдена" });
+            }
+
+            var material = await _contextDb.Materials.FirstOrDefaultAsync(x => x.Id_Material == request.MaterialId);
+            if (material == null)
+            {
+                return new NotFoundObjectResult(new { status = false, error = "Материал не найден" });
+            }
+
+            if (request.Quantity <= 0)
+            {
+                return new BadRequestObjectResult(new { status = false, error = "Количество должно быть больше 0" });
+            }
+
+            material.Quantity = System.Math.Max(0, material.Quantity - request.Quantity);
+            await _contextDb.SaveChangesAsync();
+
+            var message = $"Бригадир {session.User.Name} запросил материал \"{material.Name}\" в количестве {request.Quantity} {material.Unit}";
+            await _notificationHub.Clients.All.SendAsync("ReceiveNotification", message);
+
+            return new OkObjectResult(new { status = true, material, message });
         }
     }
 }

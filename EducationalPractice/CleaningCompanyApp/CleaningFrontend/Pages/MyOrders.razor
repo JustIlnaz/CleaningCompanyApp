@@ -1,0 +1,216 @@
+@page "/my-orders"
+@using CleaningFrontend.ApiRequests.Services
+@using CleaningFrontend.ApiRequests.Model
+@using Blazored.LocalStorage
+
+<div class="page-container">
+    <div class="page-header">
+        <h1>Мои заказы</h1>
+        @if (UserRole == 4)
+        {
+            <button class="btn-primary" @onclick="ShowCreateModal">Новый заказ на уборку</button>
+        }
+    </div>
+
+    @if (loading)
+    {
+        <p>Загрузка...</p>
+    }
+    else if (!orders.Any())
+    {
+        <div class="empty-state">
+            <p>У вас пока нет заказов.</p>
+            @if (UserRole == 4)
+            {
+                <p>Создайте первый заказ на уборку — мы подберём бригаду.</p>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="orders-grid">
+            @foreach (var order in orders)
+            {
+                <div class="order-card">
+                    <div class="order-card-header">
+                        <span class="order-id">Заказ №@order.Id_Order</span>
+                        <span class="@GetStatusClass(order.Status)">@order.Status</span>
+                    </div>
+                    <div class="order-card-body">
+                        <p><strong>Адрес:</strong> @(string.IsNullOrEmpty(order.ObjectAddress) ? "—" : order.ObjectAddress)</p>
+                        <p><strong>Тип уборки:</strong> @order.CleaningType</p>
+                        <p><strong>Запланировано:</strong> @order.ScheduledDate.ToLocalTime().ToString("dd.MM.yyyy")</p>
+                        <p><strong>Бригада:</strong> @(string.IsNullOrEmpty(order.BrigadeName) ? "Не назначена" : order.BrigadeName)</p>
+                        <p><strong>Стоимость:</strong> @order.Price.ToString("0.##") ₽</p>
+                        <p><strong>Оплата:</strong> @order.PaymentStatus</p>
+                    </div>
+                    @if (UserRole == 4)
+                    {
+                        <div class="order-card-actions">
+                            @if (order.Status == "На приёмке")
+                            {
+                                <button class="btn-primary" @onclick="() => AcceptOrder(order)">Принять работу</button>
+                            }
+                            @if (order.Status == "Новый" || order.Status == "В работе")
+                            {
+                                <button class="btn-danger" @onclick="() => CancelOrder(order)">Отменить</button>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@if (showCreate && UserRole == 4)
+{
+    <div class="modal">
+        <div class="modal-content">
+            <h2>Новый заказ на уборку</h2>
+            <EditForm Model="@createModel" OnValidSubmit="@SubmitCreate">
+                <div class="form-group">
+                    <label>Адрес объекта</label>
+                    <InputText @bind-Value="createModel.Address" class="form-control" />
+                </div>
+                <div class="form-group">
+                    <label>Тип объекта</label>
+                    <select @bind="createModel.ObjectType" class="form-control">
+                        <option value="Квартира">Квартира</option>
+                        <option value="Офис">Офис</option>
+                        <option value="Дом">Дом</option>
+                        <option value="Коммерческое помещение">Коммерческое помещение</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Площадь, м²</label>
+                    <InputNumber TValue="double" @bind-Value="createModel.Area" class="form-control" />
+                </div>
+                <div class="form-group">
+                    <label>Тип уборки</label>
+                    <select @bind="createModel.CleaningType" class="form-control">
+                        <option value="Обычная">Обычная</option>
+                        <option value="Генеральная">Генеральная</option>
+                        <option value="После ремонта">После ремонта</option>
+                        <option value="Клининг окон">Клининг окон</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Желаемая дата</label>
+                    <InputDate TValue="DateTime" @bind-Value="createModel.ScheduledDate" class="form-control" />
+                </div>
+                @if (!string.IsNullOrEmpty(createError))
+                {
+                    <div class="error-message">@createError</div>
+                }
+                <div class="form-actions">
+                    <button type="submit" class="btn-primary" disabled="@submitting">@(submitting ? "Создание..." : "Оформить")</button>
+                    <button type="button" class="btn-secondary" @onclick="() => showCreate = false">Отмена</button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@code {
+    private List<OrderModel> orders = new();
+    private int UserRole;
+    private bool loading = true;
+    private bool showCreate = false;
+    private bool submitting = false;
+    private string createError = "";
+    private CreateMyOrderModel createModel = new();
+
+    [Inject] protected OrderApiService OrderService { get; set; }
+    [Inject] protected NavigationManager Navigation { get; set; }
+    [Inject] protected ILocalStorageService LocalStorage { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var token = await LocalStorage.GetItemAsync<string>("token");
+        if (string.IsNullOrEmpty(token))
+        {
+            Navigation.NavigateTo("/login");
+            return;
+        }
+
+        var user = await LocalStorage.GetItemAsync<UserModel>("user");
+        UserRole = user?.Role_Id ?? 0;
+        if (UserRole != 1 && UserRole != 2 && UserRole != 4)
+        {
+            Navigation.NavigateTo("/profile");
+            return;
+        }
+
+        await Reload(token);
+    }
+
+    private async Task Reload(string token)
+    {
+        loading = true;
+        orders = await OrderService.GetMyOrders(token);
+        loading = false;
+    }
+
+    private void ShowCreateModal()
+    {
+        createModel = new CreateMyOrderModel();
+        createError = "";
+        showCreate = true;
+    }
+
+    private async Task SubmitCreate()
+    {
+        var token = await LocalStorage.GetItemAsync<string>("token");
+        if (string.IsNullOrEmpty(token)) return;
+        if (string.IsNullOrWhiteSpace(createModel.Address))
+        {
+            createError = "Укажите адрес объекта";
+            return;
+        }
+        if (createModel.Area <= 0)
+        {
+            createError = "Площадь должна быть больше 0";
+            return;
+        }
+        submitting = true;
+        var ok = await OrderService.CreateMyOrder(createModel, token);
+        submitting = false;
+        if (ok)
+        {
+            showCreate = false;
+            await Reload(token);
+        }
+        else
+        {
+            createError = "Не удалось создать заказ. Попробуйте ещё раз.";
+        }
+    }
+
+    private Task AcceptOrder(OrderModel order) => ChangeStatus(order, "Завершен");
+    private Task CancelOrder(OrderModel order) => ChangeStatus(order, "Отменен");
+
+    private async Task ChangeStatus(OrderModel order, string status)
+    {
+        var token = await LocalStorage.GetItemAsync<string>("token");
+        if (string.IsNullOrEmpty(token)) return;
+        var ok = await OrderService.ChangeStatus(order.Id_Order, status, token);
+        if (ok)
+        {
+            await Reload(token);
+        }
+    }
+
+    private string GetStatusClass(string status)
+    {
+        return status switch
+        {
+            "Новый" => "status-new",
+            "В работе" => "status-progress",
+            "На приёмке" => "status-review",
+            "Завершен" => "status-completed",
+            "Отменен" => "status-cancelled",
+            _ => ""
+        };
+    }
+}

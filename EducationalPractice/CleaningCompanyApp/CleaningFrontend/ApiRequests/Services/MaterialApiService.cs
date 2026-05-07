@@ -50,6 +50,16 @@ namespace CleaningFrontend.ApiRequests.Services
             var result = await response.Content.ReadFromJsonAsync<ActionResult>();
             return result?.status ?? false;
         }
+
+        public async Task<bool> RequestMaterial(int materialId, int quantity, string token)
+        {
+            _httpClient.DefaultRequestHeaders.Clear();
+            _httpClient.DefaultRequestHeaders.Add("Authorization", token);
+            var response = await _httpClient.PostAsJsonAsync("api/material/request", new { MaterialId = materialId, Quantity = quantity });
+            if (!response.IsSuccessStatusCode) return false;
+            var result = await response.Content.ReadFromJsonAsync<ActionResult>();
+            return result?.status ?? false;
+        }
     }
 
     public class MaterialsResult

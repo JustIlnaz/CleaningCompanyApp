@@ -1,0 +1,196 @@
+@page "/my-tasks"
+@using CleaningFrontend.ApiRequests.Services
+@using CleaningFrontend.ApiRequests.Model
+@using Blazored.LocalStorage
+
+<div class="page-container">
+    <div class="page-header">
+        <h1>Мои задания</h1>
+        <button class="btn-secondary" @onclick="OpenMaterialsModal">Запросить материалы</button>
+    </div>
+
+    @if (loading)
+    {
+        <p>Загрузка...</p>
+    }
+    else if (!orders.Any())
+    {
+        <div class="empty-state">
+            <p>У вас пока нет назначенных заданий.</p>
+            <p>Диспетчер закрепит за вашей бригадой ближайшие заказы.</p>
+        </div>
+    }
+    else
+    {
+        <div class="orders-grid">
+            @foreach (var order in orders)
+            {
+                <div class="order-card">
+                    <div class="order-card-header">
+                        <span class="order-id">Заказ №@order.Id_Order</span>
+                        <span class="@GetStatusClass(order.Status)">@order.Status</span>
+                    </div>
+                    <div class="order-card-body">
+                        <p><strong>Клиент:</strong> @order.ClientName</p>
+                        <p><strong>Адрес:</strong> @(string.IsNullOrEmpty(order.ObjectAddress) ? "—" : order.ObjectAddress)</p>
+                        <p><strong>Тип уборки:</strong> @order.CleaningType</p>
+                        <p><strong>Запланировано:</strong> @order.ScheduledDate.ToLocalTime().ToString("dd.MM.yyyy")</p>
+                        <p><strong>Стоимость:</strong> @order.Price.ToString("0.##") ₽</p>
+                    </div>
+                    <div class="order-card-actions">
+                        @if (order.Status == "Новый")
+                        {
+                            <button class="btn-primary" @onclick="() => StartWork(order)">Начать работу</button>
+                        }
+                        else if (order.Status == "В работе")
+                        {
+                            <button class="btn-primary" @onclick="() => FinishWork(order)">Сдать на приёмку</button>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@if (showMaterials)
+{
+    <div class="modal">
+        <div class="modal-content">
+            <h2>Запрос материалов</h2>
+            @if (materials == null || !materials.Any())
+            {
+                <p>Материалы не найдены.</p>
+            }
+            else
+            {
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Название</th>
+                            <th>Доступно</th>
+                            <th>Кол-во</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var material in materials)
+                        {
+                            <tr>
+                                <td>@material.Name</td>
+                                <td>@material.Quantity @material.Unit</td>
+                                <td><input type="number" min="1" max="@material.Quantity" @bind="requestedQuantities[material.Id_Material]" class="form-control" /></td>
+                                <td><button class="btn-secondary" @onclick="() => RequestMaterial(material)">Запросить</button></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+            @if (!string.IsNullOrEmpty(materialsMessage))
+            {
+                <div class="info-message">@materialsMessage</div>
+            }
+            <div class="form-actions">
+                <button class="btn-secondary" @onclick="() => showMaterials = false">Закрыть</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<OrderModel> orders = new();
+    private List<MaterialModel> materials = new();
+    private Dictionary<int, int> requestedQuantities = new();
+    private bool loading = true;
+    private bool showMaterials = false;
+    private string materialsMessage = "";
+
+    [Inject] protected OrderApiService OrderService { get; set; }
+    [Inject] protected MaterialApiService MaterialService { get; set; }
+    [Inject] protected NavigationManager Navigation { get; set; }
+    [Inject] protected ILocalStorageService LocalStorage { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var token = await LocalStorage.GetItemAsync<string>("token");
+        if (string.IsNullOrEmpty(token))
+        {
+            Navigation.NavigateTo("/login");
+            return;
+        }
+
+        var user = await LocalStorage.GetItemAsync<UserModel>("user");
+        if (user == null || user.Role_Id != 3)
+        {
+            Navigation.NavigateTo("/profile");
+            return;
+        }
+
+        await Reload(token);
+    }
+
+    private async Task Reload(string token)
+    {
+        loading = true;
+        orders = await OrderService.GetMyOrders(token);
+        loading = false;
+    }
+
+    private Task StartWork(OrderModel order) => ChangeStatus(order, "В работе");
+    private Task FinishWork(OrderModel order) => ChangeStatus(order, "На приёмке");
+
+    private async Task ChangeStatus(OrderModel order, string status)
+    {
+        var token = await LocalStorage.GetItemAsync<string>("token");
+        if (string.IsNullOrEmpty(token)) return;
+        var ok = await OrderService.ChangeStatus(order.Id_Order, status, token);
+        if (ok)
+        {
+            await Reload(token);
+        }
+    }
+
+    private async Task OpenMaterialsModal()
+    {
+        var token = await LocalStorage.GetItemAsync<string>("token");
+        if (string.IsNullOrEmpty(token)) return;
+        materials = await MaterialService.GetAllMaterials(token);
+        requestedQuantities = materials.ToDictionary(m => m.Id_Material, _ => 1);
+        materialsMessage = "";
+        showMaterials = true;
+    }
+
+    private async Task RequestMaterial(MaterialModel material)
+    {
+        var token = await LocalStorage.GetItemAsync<string>("token");
+        if (string.IsNullOrEmpty(token)) return;
+        if (!requestedQuantities.TryGetValue(material.Id_Material, out var qty) || qty <= 0)
+        {
+            materialsMessage = "Укажите количество больше 0";
+            return;
+        }
+        var ok = await MaterialService.RequestMaterial(material.Id_Material, qty, token);
+        if (ok)
+        {
+            materialsMessage = $"Запрос на {qty} {material.Unit} материала \"{material.Name}\" отправлен";
+            materials = await MaterialService.GetAllMaterials(token);
+        }
+        else
+        {
+            materialsMessage = "Не удалось отправить запрос";
+        }
+    }
+
+    private string GetStatusClass(string status)
+    {
+        return status switch
+        {
+            "Новый" => "status-new",
+            "В работе" => "status-progress",
+            "На приёмке" => "status-review",
+            "Завершен" => "status-completed",
+            "Отменен" => "status-cancelled",
+            _ => ""
+        };
+    }
+}

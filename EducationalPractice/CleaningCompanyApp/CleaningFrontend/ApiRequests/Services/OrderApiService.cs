@@ -58,6 +58,53 @@ namespace CleaningFrontend.ApiRequests.Services
             var result = await response.Content.ReadFromJsonAsync<ActionResult>();
             return result?.status ?? false;
         }
+
+        public async Task<List<OrderModel>> GetMyOrders(string token)
+        {
+            _httpClient.DefaultRequestHeaders.Clear();
+            _httpClient.DefaultRequestHeaders.Add("Authorization", token);
+            try
+            {
+                var response = await _httpClient.GetFromJsonAsync<OrdersResult>("api/order/getmyorders");
+                return response?.Orders ?? new List<OrderModel>();
+            }
+            catch (System.Net.Http.HttpRequestException)
+            {
+                return new List<OrderModel>();
+            }
+        }
+
+        public async Task<bool> CreateMyOrder(CreateMyOrderModel order, string token)
+        {
+            _httpClient.DefaultRequestHeaders.Clear();
+            _httpClient.DefaultRequestHeaders.Add("Authorization", token);
+            var response = await _httpClient.PostAsJsonAsync("api/order/createmyorder", order);
+            if (!response.IsSuccessStatusCode) return false;
+            var result = await response.Content.ReadFromJsonAsync<ActionResult>();
+            return result?.status ?? false;
+        }
+
+        public async Task<bool> ChangeStatus(int orderId, string status, string token)
+        {
+            _httpClient.DefaultRequestHeaders.Clear();
+            _httpClient.DefaultRequestHeaders.Add("Authorization", token);
+            var url = $"api/order/changestatus?id={orderId}&status={System.Uri.EscapeDataString(status)}";
+            var response = await _httpClient.PostAsync(url, null);
+            if (!response.IsSuccessStatusCode) return false;
+            var result = await response.Content.ReadFromJsonAsync<ActionResult>();
+            return result?.status ?? false;
+        }
+
+        public async Task<bool> AssignBrigade(int orderId, int brigadeId, string token)
+        {
+            _httpClient.DefaultRequestHeaders.Clear();
+            _httpClient.DefaultRequestHeaders.Add("Authorization", token);
+            var url = $"api/order/assignbrigade?orderId={orderId}&brigadeId={brigadeId}";
+            var response = await _httpClient.PostAsync(url, null);
+            if (!response.IsSuccessStatusCode) return false;
+            var result = await response.Content.ReadFromJsonAsync<ActionResult>();
+            return result?.status ?? false;
+        }
     }
 
     public class OrdersResult

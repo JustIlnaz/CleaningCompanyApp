@@ -14,6 +14,13 @@
                 <a href="/login" class="btn-secondary">Вход</a>
             </div>
         }
+        else if (currentUser != null)
+        {
+            <div class="hero-buttons">
+                <a href="@LandingPath" class="btn-primary">Перейти в @LandingTitle</a>
+                <a href="/profile" class="btn-secondary">Профиль</a>
+            </div>
+        }
     </div>
 
     <div class="features-section">
@@ -38,11 +45,32 @@
 
 @code {
     public bool IsAuthenticated { get; set; }
+    private UserModel currentUser;
+    private string LandingPath => currentUser?.Role_Id switch
+    {
+        1 => "/admin",
+        2 => "/orders",
+        3 => "/my-tasks",
+        4 => "/my-orders",
+        _ => "/profile"
+    };
+    private string LandingTitle => currentUser?.Role_Id switch
+    {
+        1 => "панель управления",
+        2 => "заказы",
+        3 => "мои задания",
+        4 => "мои заказы",
+        _ => "профиль"
+    };
 
     protected override async Task OnInitializedAsync()
     {
         var token = await LocalStorage.GetItemAsync<string>("token");
         IsAuthenticated = !string.IsNullOrEmpty(token);
+        if (IsAuthenticated)
+        {
+            currentUser = await LocalStorage.GetItemAsync<UserModel>("user");
+        }
     }
 
     [Inject] protected ILocalStorageService LocalStorage { get; set; }
