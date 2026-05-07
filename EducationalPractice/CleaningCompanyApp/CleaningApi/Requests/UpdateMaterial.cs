@@ -6,8 +6,8 @@ namespace CleaningApi.Requests
     {
         [Required(ErrorMessage = "Id материала обязателен")]
         public int Id_Material { get; set; }
-        public string Name { get; set; }
-        public string Unit { get; set; }
+        public string? Name { get; set; }
+        public string? Unit { get; set; }
         public int? Quantity { get; set; }
         public int? MinQuantity { get; set; }
         public int? BrigadeId { get; set; }
