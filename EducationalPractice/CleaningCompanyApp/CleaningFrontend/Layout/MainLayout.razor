@@ -72,7 +72,7 @@
                 </div>
             }
 
-            @if (UserRole == 3 || UserRole == 4)
+            @if (UserRole == 4)
             {
                 <div class="nav-section">
                     <div class="nav-section-title">Заказы</div>
@@ -81,6 +81,27 @@
                             <a href="/my-orders" class="nav-link @(IsActive("/my-orders") ? "active" : "")">
                                 <span class="nav-icon">☰</span>
                                 <span class="nav-text">Мои заказы</span>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            }
+
+            @if (UserRole == 3)
+            {
+                <div class="nav-section">
+                    <div class="nav-section-title">Работа</div>
+                    <ul class="nav-menu">
+                        <li>
+                            <a href="/my-tasks" class="nav-link @(IsActive("/my-tasks") ? "active" : "")">
+                                <span class="nav-icon">☰</span>
+                                <span class="nav-text">Мои задания</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="/materials" class="nav-link @(IsActive("/materials") ? "active" : "")">
+                                <span class="nav-icon">◈</span>
+                                <span class="nav-text">Материалы</span>
                             </a>
                         </li>
                     </ul>

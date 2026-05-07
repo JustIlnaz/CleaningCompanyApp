@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Threading.Tasks;
 using CleaningApi.CustomAttributes;
 using CleaningApi.Interfaces;
@@ -35,7 +36,7 @@ namespace CleaningApi.Controllers
 
         [HttpPost]
         [Route("CreateOrder")]
-        [RoleAuthorize([1, 2, 4])]
+        [RoleAuthorize([1, 2])]
         public async Task<IActionResult> CreateOrder([FromBody] CreateOrder order)
         {
             return await _orderServices.CreateOrder(order);
@@ -71,6 +72,41 @@ namespace CleaningApi.Controllers
         public async Task<IActionResult> GetOrdersByClient(int clientId)
         {
             return await _orderServices.GetOrdersByClient(clientId);
+        }
+
+        [HttpGet]
+        [Route("GetMyOrders")]
+        [RoleAuthorize([1, 2, 3, 4])]
+        public async Task<IActionResult> GetMyOrders()
+        {
+            string? token = Request.Headers["Authorization"].FirstOrDefault();
+            return await _orderServices.GetMyOrders(token);
+        }
+
+        [HttpPost]
+        [Route("CreateMyOrder")]
+        [RoleAuthorize([4])]
+        public async Task<IActionResult> CreateMyOrder([FromBody] CreateMyOrder order)
+        {
+            string? token = Request.Headers["Authorization"].FirstOrDefault();
+            return await _orderServices.CreateMyOrder(order, token);
+        }
+
+        [HttpPost]
+        [Route("ChangeStatus")]
+        [RoleAuthorize([1, 2, 3, 4])]
+        public async Task<IActionResult> ChangeStatus(int id, string status)
+        {
+            string? token = Request.Headers["Authorization"].FirstOrDefault();
+            return await _orderServices.ChangeStatus(id, status, token);
+        }
+
+        [HttpPost]
+        [Route("AssignBrigade")]
+        [RoleAuthorize([1, 2])]
+        public async Task<IActionResult> AssignBrigade(int orderId, int brigadeId)
+        {
+            return await _orderServices.AssignBrigade(orderId, brigadeId);
         }
     }
 }

@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Threading.Tasks;
 using CleaningApi.CustomAttributes;
 using CleaningApi.Interfaces;
@@ -63,6 +64,15 @@ namespace CleaningApi.Controllers
         public async Task<IActionResult> GetMaterialsByBrigade(int brigadeId)
         {
             return await _materialServices.GetMaterialsByBrigade(brigadeId);
+        }
+
+        [HttpPost]
+        [Route("Request")]
+        [RoleAuthorize([3])]
+        public async Task<IActionResult> RequestMaterial([FromBody] RequestMaterial request)
+        {
+            string? token = Request.Headers["Authorization"].FirstOrDefault();
+            return await _materialServices.RequestMaterial(request, token);
         }
     }
 }

@@ -13,5 +13,9 @@ namespace CleaningApi.Interfaces
         Task<IActionResult> DeleteOrder(int id);
         Task<IActionResult> GetOrdersByBrigade(int brigadeId);
         Task<IActionResult> GetOrdersByClient(int clientId);
+        Task<IActionResult> GetMyOrders(string token);
+        Task<IActionResult> CreateMyOrder(CreateMyOrder order, string token);
+        Task<IActionResult> ChangeStatus(int orderId, string status, string token);
+        Task<IActionResult> AssignBrigade(int orderId, int brigadeId);
     }
 }
