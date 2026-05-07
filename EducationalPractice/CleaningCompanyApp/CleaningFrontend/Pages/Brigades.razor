@@ -1,0 +1,145 @@
+@page "/brigades"
+@using CleaningFrontend.ApiRequests.Services
+@using CleaningFrontend.ApiRequests.Model
+@using Blazored.LocalStorage
+
+<div class="page-container">
+    <div class="page-header">
+        <h1>Бригады</h1>
+        @if (UserRole == 1 || UserRole == 2)
+        {
+            <button class="btn-primary" @onclick="ShowCreateModal">Создать бригаду</button>
+        }
+    </div>
+
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Название</th>
+                <th>Рейтинг</th>
+                <th>Бригадир</th>
+                @if (UserRole == 1 || UserRole == 2)
+                {
+                    <th>Действия</th>
+                }
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var brigade in brigades)
+            {
+                <tr>
+                    <td>@brigade.Id_Brigade</td>
+                    <td>@brigade.Name</td>
+                    <td>@brigade.Rating</td>
+                    <td>@brigade.BrigadierName</td>
+                    @if (UserRole == 1 || UserRole == 2)
+                    {
+                        <td>
+                            <button class="btn-secondary" @onclick="() => EditBrigade(brigade)">Изменить</button>
+                            <button class="btn-danger" @onclick="() => DeleteBrigade(brigade.Id_Brigade)">Удалить</button>
+                        </td>
+                    }
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@if (showModal)
+{
+    <div class="modal">
+        <div class="modal-content">
+            <h2>@(isEditing ? "Редактирование бригады" : "Создание бригады")</h2>
+            <EditForm Model="@brigadeModel" OnValidSubmit="@SaveBrigade">
+                <div class="form-group">
+                    <label>Название</label>
+                    <InputText @bind-value="brigadeModel.Name" class="form-control" />
+                </div>
+                <div class="form-group">
+                    <label>Рейтинг</label>
+                    <InputNumber @bind-value="brigadeModel.Rating" class="form-control" />
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn-primary">Сохранить</button>
+                    <button type="button" class="btn-secondary" @onclick="() => showModal = false">Отмена</button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@code {
+    private List<BrigadeModel> brigades = new List<BrigadeModel>();
+    private bool showModal = false;
+    private bool isEditing = false;
+    private BrigadeModel brigadeModel = new BrigadeModel();
+    private int UserRole = 0;
+
+    [Inject] protected BrigadeApiService BrigadeService { get; set; }
+    [Inject] protected HttpClient HttpClient { get; set; }
+    [Inject] protected NavigationManager Navigation { get; set; }
+    [Inject] protected ILocalStorageService LocalStorage { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var token = await LocalStorage.GetItemAsync<string>("token");
+        if (string.IsNullOrEmpty(token))
+        {
+            Navigation.NavigateTo("/login");
+            return;
+        }
+
+        var user = await LocalStorage.GetItemAsync<UserModel>("user");
+        UserRole = user?.Role_Id ?? 0;
+
+        brigades = await BrigadeService.GetAllBrigades(token);
+    }
+
+    private void ShowCreateModal()
+    {
+        isEditing = false;
+        brigadeModel = new BrigadeModel();
+        showModal = true;
+    }
+
+    private void EditBrigade(BrigadeModel brigade)
+    {
+        isEditing = true;
+        brigadeModel = new BrigadeModel
+        {
+            Id_Brigade = brigade.Id_Brigade,
+            Name = brigade.Name,
+            Rating = brigade.Rating
+        };
+        showModal = true;
+    }
+
+    private async Task SaveBrigade()
+    {
+        var token = await LocalStorage.GetItemAsync<string>("token");
+
+        bool success;
+        if (isEditing)
+        {
+            success = await BrigadeService.UpdateBrigade(brigadeModel, token);
+        }
+        else
+        {
+            success = await BrigadeService.CreateBrigade(brigadeModel, token);
+        }
+
+        if (success)
+        {
+            brigades = await BrigadeService.GetAllBrigades(token);
+            showModal = false;
+        }
+    }
+
+    private async Task DeleteBrigade(int id)
+    {
+        var token = await LocalStorage.GetItemAsync<string>("token");
+        await BrigadeService.DeleteBrigade(id, token);
+        brigades = await BrigadeService.GetAllBrigades(token);
+    }
+}

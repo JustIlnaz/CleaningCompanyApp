@@ -1,0 +1,161 @@
+@page "/admin"
+@using CleaningFrontend.ApiRequests.Services
+@using CleaningFrontend.ApiRequests.Model
+@using Blazored.LocalStorage
+
+<div class="admin-dashboard">
+    <h1>Панел управления</h1>
+    
+    <div class="stats-grid">
+        <div class="stat-card">
+            <h3>Активные заказы</h3>
+            <div class="stat-value">@activeOrders</div>
+        </div>
+        <div class="stat-card">
+            <h3>Бригады</h3>
+            <div class="stat-value">@brigadesCount</div>
+        </div>
+        <div class="stat-card">
+            <h3>Выручка сегодня</h3>
+            <div class="stat-value">@revenue.ToString("C")</div>
+        </div>
+        <div class="stat-card">
+            <h3>Необходимы материалы</h3>
+            <div class="stat-value">@lowMaterials</div>
+        </div>
+    </div>
+
+    <div class="dashboard-sections">
+        <div class="section">
+            <h2>Последние заказы</h2>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Клиент</th>
+                        <th>Статус</th>
+                        <th>Бригада</th>
+                        <th>Дата</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var order in recentOrders)
+                    {
+                        <tr>
+                            <td>@order.Id_Order</td>
+                            <td>@order.ClientName</td>
+                            <td><span class="@GetStatusClass(order.Status)">@order.Status</span></td>
+                            <td>@order.BrigadeName</td>
+                            <td>@order.ScheduledDate.ToString("dd.MM.yyyy")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <div class="section">
+            <h2>Загрузка бригад</h2>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Бригада</th>
+                        <th>Рейтинг</th>
+                        <th>Активные заказы</th>
+                        <th>Статус</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var brigade in brigadeLoads)
+                    {
+                        <tr>
+                            <td>@brigade.Name</td>
+                            <td>@brigade.Rating</td>
+                            <td>@brigade.ActiveOrders</td>
+                            <td><span class="@GetLoadClass(brigade.LoadPercent)">@brigade.LoadPercent%</span></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@code {
+    private int activeOrders = 0;
+    private int brigadesCount = 0;
+    private decimal revenue = 0;
+    private int lowMaterials = 0;
+    private List<OrderModel> recentOrders = new List<OrderModel>();
+    private List<BrigadeLoadModel> brigadeLoads = new List<BrigadeLoadModel>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var token = await LocalStorage.GetItemAsync<string>("token");
+        if (string.IsNullOrEmpty(token))
+        {
+            Navigation.NavigateTo("/login");
+            return;
+        }
+
+        var orderService = new OrderApiService(HttpClient);
+        var brigadeService = new BrigadeApiService(HttpClient);
+        var materialService = new MaterialApiService(HttpClient);
+
+        HttpClient.DefaultRequestHeaders.Clear();
+        HttpClient.DefaultRequestHeaders.Add("Authorization", token);
+
+        var orders = await orderService.GetAllOrders(token);
+        activeOrders = orders.Count(o => o.Status != "Завершен");
+        recentOrders = orders.OrderByDescending(o => o.CreatedDate).Take(5).ToList();
+        revenue = (decimal)orders.Where(o => o.Status == "Завершен" && o.CreatedDate.Date == DateTime.Now.Date).Sum(o => o.Price);
+
+        var brigades = await brigadeService.GetAllBrigades(token);
+        brigadesCount = brigades.Count;
+        brigadeLoads = brigades.Select(b => new BrigadeLoadModel
+        {
+            Name = b.Name,
+            Rating = b.Rating,
+            ActiveOrders = orders.Count(o => o.BrigadeId == b.Id_Brigade && o.Status != "Завершен"),
+            LoadPercent = CalculateLoadPercent(b.Id_Brigade, orders)
+        }).ToList();
+
+        var materials = await materialService.GetAllMaterials(token);
+        lowMaterials = materials.Count(m => m.Quantity <= m.MinQuantity);
+    }
+
+    private string GetStatusClass(string status)
+    {
+        return status switch
+        {
+            "Новый" => "status-new",
+            "В работе" => "status-progress",
+            "Завершен" => "status-completed",
+            "Отменен" => "status-cancelled",
+            _ => ""
+        };
+    }
+
+    private string GetLoadClass(int percent)
+    {
+        return percent > 80 ? "load-high" : percent > 50 ? "load-medium" : "load-low";
+    }
+
+    private int CalculateLoadPercent(int brigadeId, List<OrderModel> orders)
+    {
+        var total = orders.Count(o => o.BrigadeId == brigadeId);
+        var active = orders.Count(o => o.BrigadeId == brigadeId && o.Status != "Завершен");
+        return total > 0 ? (int)((double)active / total * 100) : 0;
+    }
+
+    public class BrigadeLoadModel
+    {
+        public string Name { get; set; }
+        public int Rating { get; set; }
+        public int ActiveOrders { get; set; }
+        public int LoadPercent { get; set; }
+    }
+
+    [Inject] protected HttpClient HttpClient { get; set; }
+    [Inject] protected NavigationManager Navigation { get; set; }
+    [Inject] protected ILocalStorageService LocalStorage { get; set; }
+}

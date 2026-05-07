@@ -1,0 +1,214 @@
+@inherits LayoutComponentBase
+@using Blazored.LocalStorage
+@using CleaningFrontend.ApiRequests.Model
+
+<div class="main-layout">
+    <nav class="sidebar">
+        <div class="sidebar-brand">
+            <div class="brand-icon">C</div>
+            <div class="brand-text">CleaningCo</div>
+        </div>
+
+        <div class="nav-section">
+            <div class="nav-section-title">Основное</div>
+            <ul class="nav-menu">
+                <li>
+                    <a href="/" class="nav-link @(IsActive("/") ? "active" : "")">
+                        <span class="nav-icon">⌂</span>
+                        <span class="nav-text">Главная</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+
+        @if (IsAuthenticated)
+        {
+            <div class="nav-section">
+                <div class="nav-section-title">Личное</div>
+                <ul class="nav-menu">
+                    <li>
+                        <a href="/profile" class="nav-link @(IsActive("/profile") ? "active" : "")">
+                            <span class="nav-icon">◙</span>
+                            <span class="nav-text">Профиль</span>
+                        </a>
+                    </li>
+                </ul>
+            </div>
+
+            @if (UserRole == 1 || UserRole == 2)
+            {
+                <div class="nav-section">
+                    <div class="nav-section-title">Управление</div>
+                    <ul class="nav-menu">
+                        <li>
+                            <a href="/admin" class="nav-link @(IsActive("/admin") ? "active" : "")">
+                                <span class="nav-icon">▤</span>
+                                <span class="nav-text">Панель управления</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="/orders" class="nav-link @(IsActive("/orders") ? "active" : "")">
+                                <span class="nav-icon">☰</span>
+                                <span class="nav-text">Заказы</span>
+                                @if (activeOrdersCount > 0)
+                                {
+                                    <span class="nav-badge">@activeOrdersCount</span>
+                                }
+                            </a>
+                        </li>
+                        <li>
+                            <a href="/brigades" class="nav-link @(IsActive("/brigades") ? "active" : "")">
+                                <span class="nav-icon">♦</span>
+                                <span class="nav-text">Бригады</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="/materials" class="nav-link @(IsActive("/materials") ? "active" : "")">
+                                <span class="nav-icon">◈</span>
+                                <span class="nav-text">Материалы</span>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            }
+
+            @if (UserRole == 3 || UserRole == 4)
+            {
+                <div class="nav-section">
+                    <div class="nav-section-title">Заказы</div>
+                    <ul class="nav-menu">
+                        <li>
+                            <a href="/my-orders" class="nav-link @(IsActive("/my-orders") ? "active" : "")">
+                                <span class="nav-icon">☰</span>
+                                <span class="nav-text">Мои заказы</span>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            }
+
+            <div class="nav-section">
+                <div class="nav-section-title">Система</div>
+                <ul class="nav-menu">
+                    <li>
+                        <button class="nav-link logout-btn" @onclick="Logout">
+                            <span class="nav-icon">→</span>
+                            <span class="nav-text">Выход</span>
+                        </button>
+                    </li>
+                </ul>
+            </div>
+        }
+        else
+        {
+            <div class="nav-section">
+                <div class="nav-section-title">Авторизация</div>
+                <ul class="nav-menu">
+                    <li>
+                        <a href="/login" class="nav-link @(IsActive("/login") ? "active" : "")">
+                            <span class="nav-icon">→</span>
+                            <span class="nav-text">Вход</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/register" class="nav-link @(IsActive("/register") ? "active" : "")">
+                            <span class="nav-icon">+</span>
+                            <span class="nav-text">Регистрация</span>
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        }
+
+        @if (IsAuthenticated && currentUser != null)
+        {
+            <div class="sidebar-footer">
+                <div class="user-info">
+                    <div class="user-avatar">@GetUserInitials()</div>
+                    <div class="user-details">
+                        <div class="user-name">@currentUser.Name</div>
+                        <div class="user-role">@GetRoleName()</div>
+                    </div>
+                </div>
+            </div>
+        }
+    </nav>
+
+    <main class="content">
+        @Body
+    </main>
+</div>
+
+@code {
+    public bool IsAuthenticated { get; set; }
+    public int UserRole { get; set; }
+    public int activeOrdersCount { get; set; }
+    public UserModel currentUser { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var token = await LocalStorage.GetItemAsync<string>("token");
+        IsAuthenticated = !string.IsNullOrEmpty(token);
+        if (IsAuthenticated)
+        {
+            currentUser = await LocalStorage.GetItemAsync<UserModel>("user");
+            UserRole = currentUser?.Role_Id ?? 0;
+        }
+        Navigation.LocationChanged += OnLocationChanged;
+    }
+
+    private void OnLocationChanged(object sender, LocationChangedEventArgs e)
+    {
+        StateHasChanged();
+    }
+
+    private bool IsActive(string href)
+    {
+        var currentUri = Navigation.Uri;
+        var baseUri = Navigation.BaseUri;
+        var currentPath = currentUri.Replace(baseUri, "/");
+        if (!currentPath.StartsWith("/")) currentPath = "/" + currentPath;
+
+        if (href == "/")
+        {
+            return currentPath == "/" || currentPath == "";
+        }
+        return currentPath.StartsWith(href, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private string GetUserInitials()
+    {
+        if (currentUser == null || string.IsNullOrWhiteSpace(currentUser.Name)) return "?";
+        var name = currentUser.Name.Trim();
+        var spaceIdx = name.IndexOf(' ');
+        if (spaceIdx > 0 && spaceIdx < name.Length - 1)
+        {
+            var first = char.ToUpperInvariant(name[0]).ToString();
+            var second = char.ToUpperInvariant(name[spaceIdx + 1]).ToString();
+            return first + second;
+        }
+        return char.ToUpperInvariant(name[0]).ToString();
+    }
+
+    private string GetRoleName()
+    {
+        return UserRole switch
+        {
+            1 => "Администратор",
+            2 => "Диспетчер",
+            3 => "Бригадир",
+            4 => "Клиент",
+            _ => "Пользователь"
+        };
+    }
+
+    private async Task Logout()
+    {
+        await LocalStorage.RemoveItemAsync("token");
+        await LocalStorage.RemoveItemAsync("user");
+        Navigation.NavigateTo("/login");
+    }
+
+    [Inject] protected ILocalStorageService LocalStorage { get; set; }
+    [Inject] protected NavigationManager Navigation { get; set; }
+}

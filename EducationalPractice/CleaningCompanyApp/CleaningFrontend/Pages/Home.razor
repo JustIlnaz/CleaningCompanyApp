@@ -1,0 +1,49 @@
+@page "/"
+@using CleaningFrontend.ApiRequests.Services
+@using CleaningFrontend.ApiRequests.Model
+@using Blazored.LocalStorage
+
+<div class="home-container">
+    <div class="hero-section">
+        <h1>Платформа управления клининговой компанией</h1>
+        <p>Автоматизация заказов, управление бригадами, контроль качества</p>
+        @if (!IsAuthenticated)
+        {
+            <div class="hero-buttons">
+                <a href="/register" class="btn-primary">Регистрация</a>
+                <a href="/login" class="btn-secondary">Вход</a>
+            </div>
+        }
+    </div>
+
+    <div class="features-section">
+        <div class="feature-card">
+            <h3>Прием заказов</h3>
+            <p>Быстрое оформление и планирование уборки</p>
+        </div>
+        <div class="feature-card">
+            <h3>Управление бригадами</h3>
+            <p>Контроль графиков и загрузки бригад</p>
+        </div>
+        <div class="feature-card">
+            <h3>Контроль качества</h3>
+            <p>Проверка по чек-листам и фотоотчеты</p>
+        </div>
+        <div class="feature-card">
+            <h3>Учет материалов</h3>
+            <p>Складской учет и оптимизация расходов</p>
+        </div>
+    </div>
+</div>
+
+@code {
+    public bool IsAuthenticated { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var token = await LocalStorage.GetItemAsync<string>("token");
+        IsAuthenticated = !string.IsNullOrEmpty(token);
+    }
+
+    [Inject] protected ILocalStorageService LocalStorage { get; set; }
+}

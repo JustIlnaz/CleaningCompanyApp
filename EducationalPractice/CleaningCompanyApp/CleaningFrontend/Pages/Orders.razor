@@ -1,0 +1,207 @@
+@page "/orders"
+@using CleaningFrontend.ApiRequests.Services
+@using CleaningFrontend.ApiRequests.Model
+@using Blazored.LocalStorage
+
+<div class="page-container">
+    <div class="page-header">
+        <h1>Заказы на уборку</h1>
+        @if (UserRole == 1 || UserRole == 2)
+        {
+            <button class="btn-primary" @onclick="ShowCreateModal">Создать заказ</button>
+        }
+    </div>
+
+    <div class="filters">
+            <select @bind="statusFilter">
+            <option value="">Все статусы</option>
+            <option value="Новый">Новый</option>
+            <option value="В работе">В работе</option>
+            <option value="Завершен">Завершен</option>
+            <option value="Отменен">Отменен</option>
+        </select>
+    </div>
+
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Клиент</th>
+                <th>Объект</th>
+                <th>Тип уборки</th>
+                <th>Дата</th>
+                <th>Статус</th>
+                <th>Бригада</th>
+                <th>Цена</th>
+                @if (UserRole == 1 || UserRole == 2)
+                {
+                    <th>Действия</th>
+                }
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var order in filteredOrders)
+            {
+                <tr>
+                    <td>@order.Id_Order</td>
+                    <td>@order.ClientName</td>
+                    <td>@order.ObjectAddress</td>
+                    <td>@order.CleaningType</td>
+                    <td>@order.ScheduledDate.ToString("dd.MM.yyyy")</td>
+                    <td><span class="@GetStatusClass(order.Status)">@order.Status</span></td>
+                    <td>@order.BrigadeName</td>
+                    <td>@order.Price.ToString("C")</td>
+                    @if (UserRole == 1 || UserRole == 2)
+                    {
+                        <td>
+                            <button class="btn-secondary" @onclick="() => EditOrder(order)">Изменить</button>
+                            <button class="btn-danger" @onclick="() => DeleteOrder(order.Id_Order)">Удалить</button>
+                        </td>
+                    }
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@if (showModal)
+{
+    <div class="modal">
+        <div class="modal-content">
+            <h2>@(isEditing ? "Редактирование заказа" : "Создание заказа")</h2>
+            <EditForm Model="@orderModel" OnValidSubmit="@SaveOrder">
+                <div class="form-group">
+                    <label>Дата выполнения</label>
+                    <InputDate @bind-value="orderModel.ScheduledDate" class="form-control" />
+                </div>
+                <div class="form-group">
+                    <label>Тип уборки</label>
+                    <select @bind="orderModel.CleaningType" class="form-control">
+                        <option value="Обычная">Обычная</option>
+                        <option value="Генеральная">Генеральная</option>
+                        <option value="После ремонта">После ремонта</option>
+                        <option value="Клининг окон">Клининг окон</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Цена</label>
+                    <InputNumber @bind-value="orderModel.Price" class="form-control" />
+                </div>
+                <div class="form-group">
+                    <label>Статус</label>
+                    <select @bind="orderModel.Status" class="form-control">
+                        <option value="Новый">Новый</option>
+                        <option value="В работе">В работе</option>
+                        <option value="Завершен">Завершен</option>
+                        <option value="Отменен">Отменен</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn-primary">Сохранить</button>
+                    <button type="button" class="btn-secondary" @onclick="() => showModal = false">Отмена</button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@code {
+    private List<OrderModel> orders = new List<OrderModel>();
+    private List<OrderModel> filteredOrders = new List<OrderModel>();
+    private string statusFilter = "";
+    private bool showModal = false;
+    private bool isEditing = false;
+    private OrderModel orderModel = new OrderModel();
+    private int UserRole = 0;
+
+    [Inject] protected OrderApiService OrderService { get; set; }
+    [Inject] protected HttpClient HttpClient { get; set; }
+    [Inject] protected NavigationManager Navigation { get; set; }
+    [Inject] protected ILocalStorageService LocalStorage { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var token = await LocalStorage.GetItemAsync<string>("token");
+        if (string.IsNullOrEmpty(token))
+        {
+            Navigation.NavigateTo("/login");
+            return;
+        }
+
+        var user = await LocalStorage.GetItemAsync<UserModel>("user");
+        UserRole = user?.Role_Id ?? 0;
+
+        orders = await OrderService.GetAllOrders(token);
+        filteredOrders = orders;
+    }
+
+    private void FilterOrders()
+    {
+        filteredOrders = string.IsNullOrEmpty(statusFilter) 
+            ? orders 
+            : orders.Where(o => o.Status == statusFilter).ToList();
+    }
+
+    private void ShowCreateModal()
+    {
+        isEditing = false;
+        orderModel = new OrderModel();
+        showModal = true;
+    }
+
+    private void EditOrder(OrderModel order)
+    {
+        isEditing = true;
+        orderModel = new OrderModel
+        {
+            Id_Order = order.Id_Order,
+            ScheduledDate = order.ScheduledDate,
+            CleaningType = order.CleaningType,
+            Price = order.Price,
+            Status = order.Status
+        };
+        showModal = true;
+    }
+
+    private async Task SaveOrder()
+    {
+        var token = await LocalStorage.GetItemAsync<string>("token");
+
+        bool success;
+        if (isEditing)
+        {
+            success = await OrderService.UpdateOrder(orderModel, token);
+        }
+        else
+        {
+            success = await OrderService.CreateOrder(orderModel, token);
+        }
+
+        if (success)
+        {
+            orders = await OrderService.GetAllOrders(token);
+            filteredOrders = orders;
+            showModal = false;
+        }
+    }
+
+    private async Task DeleteOrder(int id)
+    {
+        var token = await LocalStorage.GetItemAsync<string>("token");
+        await OrderService.DeleteOrder(id, token);
+        orders = await OrderService.GetAllOrders(token);
+        filteredOrders = orders;
+    }
+
+    private string GetStatusClass(string status)
+    {
+        return status switch
+        {
+            "Новый" => "status-new",
+            "В работе" => "status-progress",
+            "Завершен" => "status-completed",
+            "Отменен" => "status-cancelled",
+            _ => ""
+        };
+    }
+}

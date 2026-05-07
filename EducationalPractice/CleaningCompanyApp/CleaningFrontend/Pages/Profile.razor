@@ -1,0 +1,57 @@
+@page "/profile"
+@using CleaningFrontend.ApiRequests.Services
+@using CleaningFrontend.ApiRequests.Model
+@using Blazored.LocalStorage
+
+<div class="page-container">
+    <h1>Профиль пользователя</h1>
+    
+    @if (user != null)
+    {
+        <div class="profile-card">
+            <div class="profile-info">
+                <h2>@user.Name</h2>
+                <p><strong>Email:</strong> @user.Email</p>
+                <p><strong>Телефон:</strong> @user.Phone</p>
+                <p><strong>Роль:</strong> @GetRoleName(user.Role_Id)</p>
+            </div>
+        </div>
+    }
+    else
+    {
+        <p>Загрузка...</p>
+    }
+</div>
+
+@code {
+    private UserModel user;
+
+    [Inject] protected UserApiService UserService { get; set; }
+    [Inject] protected HttpClient HttpClient { get; set; }
+    [Inject] protected NavigationManager Navigation { get; set; }
+    [Inject] protected ILocalStorageService LocalStorage { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var token = await LocalStorage.GetItemAsync<string>("token");
+        if (string.IsNullOrEmpty(token))
+        {
+            Navigation.NavigateTo("/login");
+            return;
+        }
+
+        user = await UserService.GetProfile(token);
+    }
+
+    private string GetRoleName(int roleId)
+    {
+        return roleId switch
+        {
+            1 => "Администратор",
+            2 => "Диспетчер",
+            3 => "Бригадир",
+            4 => "Клиент",
+            _ => "Неизвестно"
+        };
+    }
+}

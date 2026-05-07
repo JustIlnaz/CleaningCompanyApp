@@ -1,0 +1,175 @@
+@page "/materials"
+@using CleaningFrontend.ApiRequests.Services
+@using CleaningFrontend.ApiRequests.Model
+@using Blazored.LocalStorage
+
+<div class="page-container">
+    <div class="page-header">
+        <h1>Материалы и химия</h1>
+        @if (UserRole == 1 || UserRole == 2)
+        {
+            <button class="btn-primary" @onclick="ShowCreateModal">Добавить материал</button>
+        }
+    </div>
+
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Название</th>
+                <th>Ед. изм.</th>
+                <th>Количество</th>
+                <th>Мин. кол-во</th>
+                <th>Бригада</th>
+                <th>Статус</th>
+                @if (UserRole == 1 || UserRole == 2)
+                {
+                    <th>Действия</th>
+                }
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var material in materials)
+            {
+                <tr class="@GetRowClass(material)">
+                    <td>@material.Id_Material</td>
+                    <td>@material.Name</td>
+                    <td>@material.Unit</td>
+                    <td>@material.Quantity</td>
+                    <td>@material.MinQuantity</td>
+                    <td>@material.BrigadeName</td>
+                    <td>
+                        @if (material.Quantity <= material.MinQuantity)
+                        {
+                            <span class="status-danger">Необходимо пополнение</span>
+                        }
+                        else
+                        {
+                            <span class="status-ok">В норме</span>
+                        }
+                    </td>
+                    @if (UserRole == 1 || UserRole == 2)
+                    {
+                        <td>
+                            <button class="btn-secondary" @onclick="() => EditMaterial(material)">Изменить</button>
+                            <button class="btn-danger" @onclick="() => DeleteMaterial(material.Id_Material)">Удалить</button>
+                        </td>
+                    }
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@if (showModal)
+{
+    <div class="modal">
+        <div class="modal-content">
+            <h2>@(isEditing ? "Редактирование материала" : "Добавление материала")</h2>
+            <EditForm Model="@materialModel" OnValidSubmit="@SaveMaterial">
+                <div class="form-group">
+                    <label>Название</label>
+                    <InputText @bind-value="materialModel.Name" class="form-control" />
+                </div>
+                <div class="form-group">
+                    <label>Единица измерения</label>
+                    <InputText @bind-value="materialModel.Unit" class="form-control" />
+                </div>
+                <div class="form-group">
+                    <label>Количество</label>
+                    <InputNumber @bind-value="materialModel.Quantity" class="form-control" />
+                </div>
+                <div class="form-group">
+                    <label>Минимальное количество</label>
+                    <InputNumber @bind-value="materialModel.MinQuantity" class="form-control" />
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn-primary">Сохранить</button>
+                    <button type="button" class="btn-secondary" @onclick="() => showModal = false">Отмена</button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@code {
+    private List<MaterialModel> materials = new List<MaterialModel>();
+    private bool showModal = false;
+    private bool isEditing = false;
+    private MaterialModel materialModel = new MaterialModel();
+    private int UserRole = 0;
+
+    [Inject] protected MaterialApiService MaterialService { get; set; }
+    [Inject] protected HttpClient HttpClient { get; set; }
+    [Inject] protected NavigationManager Navigation { get; set; }
+    [Inject] protected ILocalStorageService LocalStorage { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var token = await LocalStorage.GetItemAsync<string>("token");
+        if (string.IsNullOrEmpty(token))
+        {
+            Navigation.NavigateTo("/login");
+            return;
+        }
+
+        var user = await LocalStorage.GetItemAsync<UserModel>("user");
+        UserRole = user?.Role_Id ?? 0;
+
+        materials = await MaterialService.GetAllMaterials(token);
+    }
+
+    private string GetRowClass(MaterialModel material)
+    {
+        return material.Quantity <= material.MinQuantity ? "row-warning" : "";
+    }
+
+    private void ShowCreateModal()
+    {
+        isEditing = false;
+        materialModel = new MaterialModel();
+        showModal = true;
+    }
+
+    private void EditMaterial(MaterialModel material)
+    {
+        isEditing = true;
+        materialModel = new MaterialModel
+        {
+            Id_Material = material.Id_Material,
+            Name = material.Name,
+            Unit = material.Unit,
+            Quantity = material.Quantity,
+            MinQuantity = material.MinQuantity
+        };
+        showModal = true;
+    }
+
+    private async Task SaveMaterial()
+    {
+        var token = await LocalStorage.GetItemAsync<string>("token");
+
+        bool success;
+        if (isEditing)
+        {
+            success = await MaterialService.UpdateMaterial(materialModel, token);
+        }
+        else
+        {
+            success = await MaterialService.CreateMaterial(materialModel, token);
+        }
+
+        if (success)
+        {
+            materials = await MaterialService.GetAllMaterials(token);
+            showModal = false;
+        }
+    }
+
+    private async Task DeleteMaterial(int id)
+    {
+        var token = await LocalStorage.GetItemAsync<string>("token");
+        await MaterialService.DeleteMaterial(id, token);
+        materials = await MaterialService.GetAllMaterials(token);
+    }
+}
