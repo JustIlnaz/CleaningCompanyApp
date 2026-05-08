@@ -26,5 +26,7 @@ namespace CleaningApi.Models
         [ForeignKey("User")]
         public int ClientId { get; set; }
         public User Client { get; set; }
+
+        public Act Act { get; set; }
     }
 }

@@ -108,6 +108,21 @@
                 </div>
             }
 
+            @if (UserRole == 5)
+            {
+                <div class="nav-section">
+                    <div class="nav-section-title">Контроль качества</div>
+                    <ul class="nav-menu">
+                        <li>
+                            <a href="/supervisor" class="nav-link @(IsActive("/supervisor") ? "active" : "")">
+                                <span class="nav-icon">👁️</span>
+                                <span class="nav-text">Контроль качества</span>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            }
+
             <div class="nav-section">
                 <div class="nav-section-title">Система</div>
                 <ul class="nav-menu">
@@ -219,6 +234,7 @@
             2 => "Диспетчер",
             3 => "Бригадир",
             4 => "Клиент",
+            5 => "Супервайзер",
             _ => "Пользователь"
         };
     }

@@ -122,6 +122,7 @@ namespace CleaningFrontend.ApiRequests.Services
     {
         public bool status { get; set; }
         public List<OrderModel> Orders { get; set; }
+        public string error { get; set; }
     }
 
     public class OrderResult

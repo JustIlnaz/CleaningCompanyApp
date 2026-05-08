@@ -1,19 +1,14 @@
-using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
+using System;
 
-namespace CleaningApi.Models
+namespace CleaningFrontend.ApiRequests.Model
 {
-    public class Checklist
+    public class ChecklistModel
     {
-        [Key]
         public int Id_Checklist { get; set; }
         public string Item { get; set; }
         public bool IsCompleted { get; set; }
         public bool IsVerified { get; set; }
         public string SupervisorRemarks { get; set; }
-
-        [ForeignKey("Order")]
         public int OrderId { get; set; }
-        public Order Order { get; set; }
     }
 }

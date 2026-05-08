@@ -16,5 +16,6 @@ builder.Services.AddScoped<CleaningFrontend.ApiRequests.Services.OrderApiService
 builder.Services.AddScoped<CleaningFrontend.ApiRequests.Services.BrigadeApiService>();
 builder.Services.AddScoped<CleaningFrontend.ApiRequests.Services.MaterialApiService>();
 builder.Services.AddScoped<CleaningFrontend.ApiRequests.Services.ObjectApiService>();
+builder.Services.AddScoped<CleaningFrontend.ApiRequests.Services.SupervisorApiService>();
 
 await builder.Build().RunAsync();

@@ -17,7 +17,8 @@ namespace CleaningApi.DatabaseContext
                     new Role { Id_Role = 1, Name = "Administrator" },
                     new Role { Id_Role = 2, Name = "Dispatcher" },
                     new Role { Id_Role = 3, Name = "Brigadier" },
-                    new Role { Id_Role = 4, Name = "Client" }
+                    new Role { Id_Role = 4, Name = "Client" },
+                    new Role { Id_Role = 5, Name = "Supervisor" }
                 };
 
                 context.Roles.AddRange(roles);
@@ -48,6 +49,27 @@ namespace CleaningApi.DatabaseContext
                 };
                 context.Materials.AddRange(materials);
                 context.SaveChanges();
+            }
+
+            if (!context.Users.Any(u => u.Role_Id == 5)) 
+            {
+                var supervisorUser = new User   
+                {
+                    Name = "Иванов Иван Иванович",
+                    Phone = "+7 (999) 123-45-67",
+                    Email = "supervisor@example.com",
+                    Password = "supervisor123", 
+                    Role_Id = 5
+                };
+                context.Users.Add(supervisorUser);
+                context.SaveChanges();
+                
+                var brigade = context.Brigades.FirstOrDefault();
+                if (brigade != null)
+                {
+                    brigade.BrigadierId = supervisorUser.Id_User;
+                    context.SaveChanges();
+                }
             }
         }
     }

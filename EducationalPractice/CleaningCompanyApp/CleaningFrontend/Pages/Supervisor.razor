@@ -1,0 +1,321 @@
+@page "/supervisor"
+@using CleaningFrontend.ApiRequests.Model
+@using CleaningFrontend.ApiRequests.Services
+@inject SupervisorApiService SupervisorApiService
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+@inject NavigationManager NavigationManager
+
+<PageTitle>Контроль качества</PageTitle>
+
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Заказы на приёмку</h2>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Загрузка...</span>
+            </div>
+        </div>
+    }
+    else if (errorMessage != null)
+    {
+        <div class="alert alert-danger">@errorMessage</div>
+    }
+    else if (ordersForInspection == null || !ordersForInspection.Any())
+    {
+        <div class="alert alert-info">Нет заказов на приёмку</div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Дата создания</th>
+                        <th>Дата выполнения</th>
+                        <th>Тип уборки</th>
+                        <th>Объект</th>
+                        <th>Бригада</th>
+                        <th>Статус</th>
+                        <th>Цена</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var order in ordersForInspection)
+                    {
+                        <tr>
+                            <td>@order.Id_Order</td>
+                            <td>@order.CreatedDate.ToString("dd.MM.yyyy HH:mm")</td>
+                            <td>@order.ScheduledDate.ToString("dd.MM.yyyy HH:mm")</td>
+                            <td>@order.CleaningType</td>
+                            <td>@order.ObjectAddress</td>
+                            <td>@order.BrigadeName</td>
+                            <td>
+                                <span class="badge @GetStatusBadgeClass(order.Status)">
+                                    @order.Status
+                                </span>
+                            </td>
+                            <td>@order.Price ₽</td>
+                            <td>
+                                <button class="btn btn-primary btn-sm me-2" @onclick="() => ShowChecklist(order.Id_Order)">
+                                    Просмотр чек-листа
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    @if (showChecklistModal)
+    {
+        <div class="modal-backdrop fade show" @onclick="CloseChecklistModal"></div>
+        <div class="modal show" style="display:block;" @onclick:stopPropagation>
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Чек-лист заказа #@selectedOrderId</h5>
+                        <button type="button" class="btn-close" @onclick="CloseChecklistModal"></button>
+                    </div>
+                    <div class="modal-body">
+                        @if (checklistLoading)
+                        {
+                            <div class="text-center">
+                                <div class="spinner-border" role="status">
+                                    <span class="visually-hidden">Загрузка...</span>
+                                </div>
+                            </div>
+                        }
+                        else if (checklistError != null)
+                        {
+                            <div class="alert alert-danger">@checklistError</div>
+                        }
+                        else if (checklistItems == null || !checklistItems.Any())
+                        {
+                            <div class="alert alert-info">Чек-лист пуст</div>
+                        }
+                        else
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-borderless">
+                                    <thead>
+                                        <tr>
+                                            <th>#</th>
+                                            <th>Пункт</th>
+                                            <th>Выполнено бригадой</th>
+                                            <th>Проверено супервайзером</th>
+                                            <th>Примечания</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var item in checklistItems)
+                                        {
+                                            <tr class="@(item.IsVerified ? "table-success" : "")">
+                                                <td>@item.Id_Checklist</td>
+                                                <td>@item.Item</td>
+                                                <td>
+                                                    <span class="badge @(item.IsCompleted ? "bg-success" : "bg-secondary")">
+                                                        @(item.IsCompleted ? "Да" : "Нет")
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <div class="form-check">
+                                                        <input type="checkbox" class="form-check-input"
+                                                               checked="@item.IsVerified"
+                                                               @onchange="async (e) => { item.IsVerified = (bool)((ChangeEventArgs)e).Value; await UpdateChecklistItem(item.Id_Checklist, item.IsVerified, item.SupervisorRemarks); }" />
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <input type="text" class="form-control"
+                                                           value="@item.SupervisorRemarks"
+                                                           placeholder="Введите замечания"
+                                                           @onchange="async (e) => { item.SupervisorRemarks = e.Value?.ToString(); await UpdateChecklistItem(item.Id_Checklist, item.IsVerified, item.SupervisorRemarks); }" />
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="CloseChecklistModal">Закрыть</button>
+                        @if (checklistItems != null && checklistItems.Any())
+                        {
+                            <button type="button" class="btn btn-success me-2" @onclick="AcceptOrder">
+                                Принять работу
+                            </button>
+                            <button type="button" class="btn btn-warning" @onclick="RequestRework">
+                                Запросить переделку
+                            </button>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<OrderModel> ordersForInspection = null;
+    private bool isLoading = false;
+    private string errorMessage = null;
+
+    private bool showChecklistModal = false;
+    private int selectedOrderId = 0;
+    private List<ChecklistModel> checklistItems = null;
+    private bool checklistLoading = false;
+    private string checklistError = null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadOrdersForInspection();
+    }
+
+    private async Task LoadOrdersForInspection()
+    {
+        try
+        {
+            isLoading = true;
+            errorMessage = null;
+            var token = await LocalStorage.GetItemAsync<string>("authToken");
+            var result = await SupervisorApiService.GetOrdersForInspection(token);
+            if (result.status)
+            {
+                ordersForInspection = result.Orders;
+            }
+            else
+            {
+                errorMessage = result.error ?? "Ошибка загрузки заказов";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Ошибка: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task ShowChecklist(int orderId)
+    {
+        try
+        {
+            selectedOrderId = orderId;
+            showChecklistModal = true;
+            checklistLoading = true;
+            checklistError = null;
+            checklistItems = null;
+            var token = await LocalStorage.GetItemAsync<string>("authToken");
+            var result = await SupervisorApiService.GetChecklistByOrderId(orderId, token);
+            if (result.status)
+            {
+                checklistItems = result.ChecklistItems;
+            }
+            else
+            {
+                checklistError = result.error ?? "Ошибка загрузки чек-листа";
+            }
+        }
+        catch (Exception ex)
+        {
+            checklistError = $"Ошибка: {ex.Message}";
+        }
+        finally
+        {
+            checklistLoading = false;
+        }
+    }
+
+    private async Task UpdateChecklistItem(int checklistId, bool isVerified, string remarks)
+    {
+        try
+        {
+            var token = await LocalStorage.GetItemAsync<string>("authToken");
+            var result = await SupervisorApiService.UpdateChecklistItem(checklistId, isVerified, remarks, token);
+            if (!result.status)
+            {
+                checklistError = result.error ?? "Ошибка обновления пункта чек-листа";
+            }
+        }
+        catch (Exception ex)
+        {
+            checklistError = $"Ошибка: {ex.Message}";
+        }
+    }
+
+    private async Task AcceptOrder()
+    {
+        try
+        {
+            var token = await LocalStorage.GetItemAsync<string>("authToken");
+            var result = await SupervisorApiService.AcceptOrder(selectedOrderId, token);
+            if (result.status)
+            {
+                CloseChecklistModal();
+                await LoadOrdersForInspection();
+            }
+            else
+            {
+                checklistError = result.error ?? "Ошибка принятия заказа";
+            }
+        }
+        catch (Exception ex)
+        {
+            checklistError = $"Ошибка: {ex.Message}";
+        }
+    }
+
+    private async Task RequestRework()
+    {
+        try
+        {
+            var token = await LocalStorage.GetItemAsync<string>("authToken");
+            var result = await SupervisorApiService.RequestRework(selectedOrderId, token);
+            if (result.status)
+            {
+                CloseChecklistModal();
+                await LoadOrdersForInspection();
+            }
+            else
+            {
+                checklistError = result.error ?? "Ошибка запроса переделки";
+            }
+        }
+        catch (Exception ex)
+        {
+            checklistError = $"Ошибка: {ex.Message}";
+        }
+    }
+
+    private void CloseChecklistModal()
+    {
+        showChecklistModal = false;
+        checklistItems = null;
+        selectedOrderId = 0;
+        checklistError = null;
+    }
+
+    private string GetStatusBadgeClass(string status)
+    {
+        return status switch
+        {
+            "Новый" => "bg-secondary",
+            "В работе" => "bg-info",
+            "На приёмке" => "bg-warning",
+            "Завершен" => "bg-success",
+            "Принят" => "bg-success",
+            "На переделке" => "bg-danger",
+            "Отменен" => "bg-dark",
+            _ => "bg-secondary"
+        };
+    }
+}

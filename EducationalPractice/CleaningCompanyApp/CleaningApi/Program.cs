@@ -31,6 +31,7 @@ builder.Services.AddScoped<IOrderServices, OrderServices>();
 builder.Services.AddScoped<IBrigadeServices, BrigadeServices>();
 builder.Services.AddScoped<IMaterialServices, MaterialServices>();
 builder.Services.AddScoped<IObjectServices, ObjectServices>();
+builder.Services.AddScoped<ISupervisorServices, SupervisorServices>();
 
 builder.Services.AddAuthentication(options =>
 {

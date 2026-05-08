@@ -33,6 +33,7 @@
                 <th>Статус</th>
                 <th>Бригада</th>
                 <th>Цена</th>
+                <th>Статус оплаты</th>
                 @if (UserRole == 1 || UserRole == 2)
                 {
                     <th>Действия</th>
@@ -51,10 +52,16 @@
                     <td><span class="@GetStatusClass(order.Status)">@order.Status</span></td>
                     <td>@order.BrigadeName</td>
                     <td>@order.Price.ToString("C")</td>
+                    <td><span class="@GetPaymentStatusClass(order.PaymentStatus)">@order.PaymentStatus</span></td>
                     @if (UserRole == 1 || UserRole == 2)
                     {
                         <td>
                             <button class="btn-secondary" @onclick="() => EditOrder(order)">Изменить</button>
+                            @if (order.BrigadeId == null)
+                            {
+                                <button class="btn-primary" @onclick="() => ShowAssignBrigadeModal(order)">Назначить бригаду</button>
+                            }
+                            <button class="@(order.PaymentStatus == "Оплачен" ? "btn-success" : "btn-warning")" @onclick="() => TogglePaymentStatus(order)">@(order.PaymentStatus == "Оплачен" ? "Оплачен" : "Отметить оплату")</button>
                             <button class="btn-danger" @onclick="() => DeleteOrder(order.Id_Order)">Удалить</button>
                         </td>
                     }
@@ -96,11 +103,52 @@
                         <option value="Отменен">Отменен</option>
                     </select>
                 </div>
+                <div class="form-group">
+                    <label>Бригада</label>
+                    <select @bind="orderModel.BrigadeId" class="form-control">
+                        <option value="">-- не назначена --</option>
+                        @foreach (var b in brigades)
+                        {
+                            <option value="@b.Id_Brigade">@b.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Статус оплаты</label>
+                    <select @bind="orderModel.PaymentStatus" class="form-control">
+                        <option value="Не оплачен">Не оплачен</option>
+                        <option value="Оплачен">Оплачен</option>
+                        <option value="Ожидает оплаты">Ожидает оплаты</option>
+                    </select>
+                </div>
                 <div class="form-actions">
                     <button type="submit" class="btn-primary">Сохранить</button>
                     <button type="button" class="btn-secondary" @onclick="() => showModal = false">Отмена</button>
                 </div>
             </EditForm>
+        </div>
+    </div>
+}
+
+@if (showAssignModal)
+{
+    <div class="modal">
+        <div class="modal-content">
+            <h2>Назначить бригаду на заказ #@assignOrder.Id_Order</h2>
+            <div class="form-group">
+                <label>Бригада</label>
+                <select @bind="selectedBrigadeId" class="form-control">
+                    <option value="">-- выберите бригаду --</option>
+                    @foreach (var b in brigades)
+                    {
+                        <option value="@b.Id_Brigade">@b.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="form-actions">
+                <button class="btn-primary" @onclick="SaveAssignBrigade">Назначить</button>
+                <button type="button" class="btn-secondary" @onclick="() => showAssignModal = false">Отмена</button>
+            </div>
         </div>
     </div>
 }
@@ -113,8 +161,13 @@
     private bool isEditing = false;
     private OrderModel orderModel = new OrderModel();
     private int UserRole = 0;
+    private List<BrigadeModel> brigades = new List<BrigadeModel>();
+    private bool showAssignModal = false;
+    private OrderModel assignOrder = new OrderModel();
+    private int? selectedBrigadeId = null;
 
     [Inject] protected OrderApiService OrderService { get; set; }
+    [Inject] protected BrigadeApiService BrigadeService { get; set; }
     [Inject] protected HttpClient HttpClient { get; set; }
     [Inject] protected NavigationManager Navigation { get; set; }
     [Inject] protected ILocalStorageService LocalStorage { get; set; }
@@ -133,6 +186,7 @@
 
         orders = await OrderService.GetAllOrders(token);
         filteredOrders = orders;
+        brigades = await BrigadeService.GetAllBrigades(token);
     }
 
     private void FilterOrders()
@@ -210,5 +264,66 @@
             "Отменен" => "status-cancelled",
             _ => ""
         };
+    }
+
+    private string GetPaymentStatusClass(string paymentStatus)
+    {
+        return paymentStatus switch
+        {
+            "Оплачен" => "status-completed",
+            "Не оплачен" => "status-cancelled",
+            "Ожидает оплаты" => "status-progress",
+            _ => ""
+        };
+    }
+
+    private void ShowAssignBrigadeModal(OrderModel order)
+    {
+        assignOrder = order;
+        selectedBrigadeId = order.BrigadeId;
+        showAssignModal = true;
+    }
+
+    private async Task SaveAssignBrigade()
+    {
+        if (selectedBrigadeId.HasValue)
+        {
+            var token = await LocalStorage.GetItemAsync<string>("token");
+            var success = await OrderService.AssignBrigade(assignOrder.Id_Order, selectedBrigadeId.Value, token);
+            if (success)
+            {
+                orders = await OrderService.GetAllOrders(token);
+                filteredOrders = orders;
+                showAssignModal = false;
+            }
+        }
+    }
+
+    private async Task TogglePaymentStatus(OrderModel order)
+    {
+        var newStatus = order.PaymentStatus == "Оплачен" ? "Не оплачен" : "Оплачен";
+        var token = await LocalStorage.GetItemAsync<string>("token");
+        var updateModel = new OrderModel
+        {
+            Id_Order = order.Id_Order,
+            ScheduledDate = order.ScheduledDate,
+            CleaningType = order.CleaningType,
+            Price = order.Price,
+            Status = order.Status,
+            PaymentStatus = newStatus,
+            ObjectId = order.ObjectId,
+            ObjectAddress = order.ObjectAddress,
+            BrigadeId = order.BrigadeId,
+            BrigadeName = order.BrigadeName,
+            ClientId = order.ClientId,
+            ClientName = order.ClientName
+        };
+        var success = await OrderService.UpdateOrder(updateModel, token);
+        if (success)
+        {
+            order.PaymentStatus = newStatus;
+            orders = await OrderService.GetAllOrders(token);
+            filteredOrders = orders;
+        }
     }
 }
